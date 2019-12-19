@@ -51,7 +51,6 @@ spec:
 
           # Period to wait before injection of chaos in sec
           - name: RAMP_TIME
-            value: ''
             
           - name: LIB
             value: 'pumba'
