@@ -1,0 +1,8 @@
+https://github.com/mitmproxy/mitmproxy/tree/master/examples/simple
+-> examplex for scripts that can induce some kind of chaos
+
+the plan is to use the transparent functionality of mitmproxy and install it as a daemonset on all nodes.
+then the target containers have to be configured to have http and https proxy over mitmproxy-pod on their node.
+if https is used, certificates have to be installed on the target container, otherwise it will not trust the proxy.
+this could be done via configmap.
+
