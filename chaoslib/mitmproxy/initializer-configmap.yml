@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mitmproxy-initializer
+  namespace: kube-system
+  labels:
+    app: mitmproxy
+data:
+  config: |
+    containers:
+      - name: tproxy
+        image: docker.io/danisla/tproxy-sidecar:0.1.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        env:
+{{- if .Values.tproxy.blockSvcCIDR }}
+          - name: BLOCK_SVC_CIDR
+            value: "{{ .Values.tproxy.blockSvcCIDR }}"
+{{- end }}
+{{- if .Values.tproxy.allowDNS }}
+          - name: ALLOW_DNS
+            value: "{{ .Values.tproxy.allowDNS }}"
+{{- end }}
+{{- if .Values.tproxy.addStandardModeProxy }}
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+{{- end }}
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi
+    volumes:
+      - name: ca-certs-fedora
+        configMap:
+            name: {{ template "tproxy.fullname" . }}-root-certs
+            items:
+              - key: root-certs.crt
+                path: ca-bundle.crt
+      - name: ca-certs-debian
+        configMap:
+            name: {{ template "tproxy.fullname" . }}-root-certs
+            items:
+              - key: root-certs.crt
+                path: ca-certificates.crt
+    volumeMounts:
+      - name: ca-certs-fedora
+        mountPath: /etc/pki/tls/certs/
+      - name: ca-certs-debian
+        mountPath: /etc/ssl/certs/
+      - name: ca-certs-debian
+        # Adding the cert to the /extra dir preserves it if update-ca-certificates is run after init.
+        mountPath: /usr/local/share/ca-certificates/extra/
+    envVars:
+{{- if .Values.tproxy.addStandardModeProxy }}
+      - name: NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: http_proxy
+        value: $(NODE_NAME):1080
+      - name: https_proxy
+        value: $(NODE_NAME):1080
+{{- end }}
+{{- end }}
