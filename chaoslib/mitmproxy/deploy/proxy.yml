@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mitmproxy
+  name: mitmproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mitmproxy
+  template:
+    metadata:
+      labels:
+        app: mitmproxy
+    spec:
+      #hostNetwork: true
+      serviceAccountName: mitmproxy
+      containers:
+      - image: mitmproxy/mitmproxy:5.0.1
+        name: mitmproxy
+        ports:
+          - containerPort: 8080
+            hostPort: 8080
+            protocol: TCP
+        command:
+          - mitmdump
+          - '-p'
+          - '8080'
+          - '-- mode'    # turn on transparent mode, hence no changes to target application needed
+          - 'transparent'
+          - '--showhost'
+          - '--ssl_insecure'
+          - 'True'
+          #- '--stream'
+          #- '4096'
+          - '-s'
+          - /opt/mitmproxy-scripts/mitm-script.py
+        volumeMounts:
+          #- name: mitmproxy-certs
+          #  mountPath: /home/mitmproxy/.mitmproxy
+          - name: app-data
+            mountPath: /opt/mitmproxy-scripts/
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+        #- name: mitmproxy-certs
+        #  secret:
+        #    secretName: mitmproxy-certs
+        - name: app-data
+          configMap:
+            name: mitmproxy
+            items:
+              - key: mitm-script.py
+                path: mitm-script.py
+
+                
+            #"ignore_hosts", Sequence[str], [],
+            #Ignore host and forward all traffic without processing it. In
+            #transparent mode, it is recommended to use an IP address (range),
+            #not the hostname. In regular mode, only SSL traffic is ignored and
+            #the hostname should be used. The supplied value is interpreted as a
+            #regular expression and matched on the ip or the hostname.
+
+            #"allow_hosts", Sequence[str], [],
+            #"Opposite of --ignore-hosts."
+            
+            #"listen_host", str, "",
+            #"Address to bind proxy to."
+
+            #"listen_port", int, LISTEN_PORT,
+            #"Proxy service port."

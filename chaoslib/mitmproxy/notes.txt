@@ -9,8 +9,10 @@ this could be done via configmap.
 https://docs.mitmproxy.org/stable/tools-mitmdump/ is the CLI tool for the proxy. idea: setup proxy pod and run
 a script with mitmdump -s script.py
 
-sidecar pod -somehow- adds iptables rules to target container:
-https://github.com/danisla/kubernetes-tproxy/tree/master/sidecar
+https://mitmproxy.readthedocs.io/en/v2.0.2/transparent/linux.html explains how transparent mode is net up
+
+
+https://github.com/ii/kube-apisnoop/tree/master/charts/tproxy
 
 for starting a docker container with a proxy:
 args:
