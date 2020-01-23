@@ -21,3 +21,15 @@ args:
 change the default gateway on linux:
 ip route del default 
 ip route add default via 192.168.130.3
+
+
+kubectl set env
+env:
+- name: NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+- name: http_proxy
+  value: $(NODE_NAME):1080
+- name: https_proxy
+  value: $(NODE_NAME):1080
