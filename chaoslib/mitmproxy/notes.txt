@@ -33,3 +33,9 @@ env:
   value: $(NODE_NAME):1080
 - name: https_proxy
   value: $(NODE_NAME):1080
+  
+kubectl set env deployment/busy1 --containers="busy-1" --list
+kubectl set env deployment/busy1 --containers="busy-1" http_proxy=http://10.96.165.59:8080
+kubectl set env deployment/busy1 --containers="busy-1" https_proxy=http://10.96.165.59:8080
+
+kubectl set env deployment/busy1 --containers="busy-1" https_proxy-

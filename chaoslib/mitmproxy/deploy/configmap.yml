@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mitmproxy
 data:
-  mitm-script.py: |
+  mitm-script.py: >
     from mitmproxy import http
     import re
     import os
@@ -15,5 +15,18 @@ data:
     RE_BUCKET = re.compile(r'https://storage.googleapis.com/%s/.*' % ALLOW_BUCKET_NAME)
 
     def request(flow: http.HTTPFlow) -> None:
-      if not RE_BUCKET.match(flow.request.pretty_url):
-        flow.response = http.HTTPResponse.make(418, b"Access Denied by Administrator", {"Content-Type": "text/html"})
+        if not RE_BUCKET.match(flow.request.pretty_url):
+            flow.response = http.HTTPResponse.make(418, b"Access Denied by Administrator", {"Content-Type": "text/html"})
+
+#from mitmproxy import http
+#
+#    def request(flow: http.HTTPFlow) -> None:
+    # pretty_url takes the "Host" header of the request into account, which
+    # is useful in transparent mode where we usually only have the IP otherwise.
+#
+        #if flow.request.pretty_url == "http://example.com/path":
+#        flow.response = http.HTTPResponse.make(
+#            200,  # (optional) status code
+#            b"Hello World",  # (optional) content
+#            {"Content-Type": "text/html"}  # (optional) headers
+#        )
