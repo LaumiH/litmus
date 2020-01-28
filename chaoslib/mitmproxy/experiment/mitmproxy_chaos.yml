@@ -1,0 +1,98 @@
+- block:
+
+    - name: Wait for the specified ramp time before injecting chaos
+      wait_for: timeout="{{ ramp_time }}"
+      when: "ramp_time is defined and ramp_time != ''"
+    
+    - name: Generate the mitmproxy deployment spec from template
+      template:
+        src: /chaoslib/mitmproxy/mitmproxy.j2
+        dest: mitmproxy.yml
+
+    - name: Setup mitmproxy to get the proxy pod 
+      shell:
+        kubectl apply -f mitmproxy.yml -n {{ app_ns }}
+      args:
+        executable: /bin/bash
+      register: deployment_result
+      failed_when: "deployment_result.rc != 0"
+      
+    - name: Add the mitmproxy service to access the pod
+      shell:
+        kubectl apply -f proxy-svc.yml -n {{ app_ns }}
+      args:
+        executable: /bin/bash
+      register: deployment_result
+      failed_when: "deployment_result.rc != 0"
+
+    - name: Confirm that mitmproxy pod is running
+      shell: >
+        kubectl get pod -l name=mitmproxy --no-headers -n {{ app_ns }}
+      args:
+        executable: /bin/bash
+      register: result
+      until: "'Running' in result.stdout"
+      delay: 1
+      retries: 90
+    
+    - name: Edit targets' http(s)_proxy env variables (what if it already has some?)
+      shell: >
+        kubectl set env {{ resource }}/{{ name }} http_proxy=svc-ip:8080; kubectl set env {{ resource }}/{{ name }} https_proxy=svc-ip:8080
+        condition: http and https?
+        is a single container specified?
+      args:
+        executable: /bin/bash
+      register: env_result
+      failed_when: "env_result.rc != 0"
+    
+    - name: Wait for chaos duration
+      wait_for: timeout="{{ c_duration }}"
+
+    - name: Delete target's http(s)_proxy env variables (and restore old ones?)
+      shell: >
+        kubectl set env {{ resource }}/{{ name }} http_proxy-; kubectl set env {{ resource }}/{{ name }} https_proxy-
+      
+    - name: Tear down the mitmproxy deployment and service
+      shell: 
+        kubectl delete -f mitmproxy.yml -n {{ app_ns }}; kubectl delete -f proxy-svc.yml -n {{ app_ns }}
+      args:
+        executable: /bin/bash
+      register: result
+      failed_when: "result.rc != 0"
+
+    - name: Confirm that mitmproxy pod is cleaned up
+      k8s_facts:
+        kind: Deployment
+        label_selectors:
+          - name=mitmproxy
+      register: resource_deployment
+      until: "resource_deployment.resources | length < 1"
+      delay: 1
+      retries: 120
+
+  rescue:
+
+    - block: 
+
+        - name: Tear down the mitmproxy deployment
+          shell: >
+            kubectl delete -f mitmproxy.yml -n {{ app_ns }}
+          args:
+            executable: /bin/bash
+          when: deployment_result.rc == 0
+        
+        - name: Confirm that mitmproxy pod is cleaned up
+          k8s_facts:
+            kind: Deployment
+            label_selectors:
+              - name=mitmproxy
+          register: resource_deployment
+          until: "resource_deployment.resources | length < 1"
+          delay: 1
+          retries: 120
+
+      when: "deployment_result is defined"
+
+    - fail:
+        msg: "mitmproxy_chaos lib failed"
+      when: true

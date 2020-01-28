@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mitmproxy
+spec:
+  selector:
+    matchLabels:
+      app: mitmproxy
+  template:
+    metadata:
+      labels:
+        app: mitmproxy
+    spec:
+      containers:
+      - image: mitmproxy/mitmproxy:latest
+        imagePullPolicy: Always
+        name: mitmproxy
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        command: ["/usr/bin/mitmdump"]
+        args: ["-s", "/scripts/script.py", "{{ args }}"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 5M
+          limits:
+            cpu: 100m
+            memory: 20M
+        volumeMounts:
+          - name: script
+            mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: mitmproxy-conf
+            defaultMode: 0744   # makes script executable
