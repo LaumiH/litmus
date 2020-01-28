@@ -1,6 +1,6 @@
 1. Inspect python script
 2. Execute 'kubectl create configmap mitmproxy-conf --from-file=script.py' to load configmap into cluster
-3. Deploy mitmdump.yml
+3. Deploy mitmdump.yml and proxy-svc.yml
 4. Select any target container. 
 5. Set http_proxy with 'kubectl set env deploy/name -c container_name http_proxy=http://service-ip:8080'
 6. Test the functionality by bashing into container and running 'curl http://example.com/'
