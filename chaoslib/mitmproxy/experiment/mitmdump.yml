@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mitmproxy
+  name: mitmproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mitmproxy
+  template:
+    metadata:
+      labels:
+        app: mitmproxy
+    spec:
+      containers:
+      - image: mitmproxy/mitmproxy:latest
+        name: mitmproxy
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        command: ["/usr/bin/mitmdump"]
+        args: ["-s", "/scripts/script.py"]
+        volumeMounts:
+          - name: script
+            mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: mitmproxy-conf
+            defaultMode: 0744   # makes script executable
+            
+
+#kubectl create configmap mitmproxy-conf --from-file=script.py
