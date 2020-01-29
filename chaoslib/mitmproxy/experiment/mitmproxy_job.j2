@@ -24,11 +24,11 @@ spec:
 {% endif%}
         resources:
           requests:
-            cpu: 10m
-            memory: 5M
-          limits:
             cpu: 100m
-            memory: 20M
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
         volumeMounts:
           - name: script
             mountPath: /scripts
