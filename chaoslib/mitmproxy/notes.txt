@@ -10,6 +10,7 @@ https://docs.mitmproxy.org/stable/tools-mitmdump/ is the CLI tool for the proxy.
 a script with mitmdump -s script.py
 
 https://mitmproxy.readthedocs.io/en/v2.0.2/transparent/linux.html explains how transparent mode is net up
+https://docs.mitmproxy.org/stable/howto-transparent/
 
 
 https://github.com/ii/kube-apisnoop/tree/master/charts/tproxy
@@ -39,3 +40,19 @@ kubectl set env deployment/busy1 --containers="busy-1" http_proxy=http://10.96.1
 kubectl set env deployment/busy1 --containers="busy-1" https_proxy=http://10.96.165.59:8080
 
 kubectl set env deployment/busy1 --containers="busy-1" https_proxy-
+
+$ http_proxy=http://localhost:8080/ curl http://example.com/
+$ https_proxy=http://localhost:8080/ curl -k https://example.com/
+
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump --set script=/home/mitmdump/.mitmdump/script.py     -> script has no effect
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump --set mode=transparent                  -> Transparent mode failure: FileNotFoundError(2, 'No such file or directory')
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s /home/mitmdump/.mitmdump/script.py   -> /usr/bin/mitmdump: No such script
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s '~/mitmproxy/.mitmproxy/script.py'   -> /usr/bin/mitmdump: No such script
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s 'script.py'                          -> /usr/bin/mitmdump: No such script
+
+
+https://stackoverflow.com/questions/31272002/running-docker-container-through-mitmproxy/31300746#31300746

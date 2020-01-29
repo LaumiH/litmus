@@ -26,7 +26,7 @@
       failed_when: "deployment_result.rc != 0"
 
     - name: Confirm that mitmproxy pod is running
-      shell: >
+      shell: 
         kubectl get pod -l name=mitmproxy --no-headers -n {{ app_ns }}
       args:
         executable: /bin/bash
@@ -37,7 +37,7 @@
     
     - name: Edit targets' http(s)_proxy env variables (what if it already has some?)
       shell: >
-        kubectl set env {{ resource }}/{{ name }} http_proxy=svc-ip:8080; kubectl set env {{ resource }}/{{ name }} https_proxy=svc-ip:8080
+        kubectl set env {{ a_kind }}/{{  }} http_proxy=svc-ip:8080; kubectl set env {{ resource }}/{{ name }} https_proxy=svc-ip:8080
         condition: http and https?
         is a single container specified?
       args:
@@ -48,9 +48,9 @@
     - name: Wait for chaos duration
       wait_for: timeout="{{ c_duration }}"
 
-    - name: Delete target's http(s)_proxy env variables (and restore old ones?)
+    - name: Delete targets' http(s)_proxy env variables (and restore old ones?)
       shell: >
-        kubectl set env {{ resource }}/{{ name }} http_proxy-; kubectl set env {{ resource }}/{{ name }} https_proxy-
+        kubectl set env {{ a_kind }}/{{ name }} http_proxy-; kubectl set env {{ a_kind }}/{{ pod-name }} https_proxy-
       
     - name: Tear down the mitmproxy deployment and service
       shell: 

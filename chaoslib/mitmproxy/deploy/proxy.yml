@@ -17,25 +17,38 @@ spec:
       #hostNetwork: true
       serviceAccountName: mitmproxy
       containers:
-      - image: mitmproxy/mitmproxy:5.0.1
+      - image: mitmproxy/mitmproxy:4.0.3
         name: mitmproxy
+        tty: true
+        stdin: true
         ports:
           - containerPort: 8080
             hostPort: 8080
             protocol: TCP
+        #securityContext:
+            #runAsUser: 100
         command:
           - mitmdump
-          - '-p'
+          - '--listen-port'
           - '8080'
-          - '-- mode'    # turn on transparent mode, hence no changes to target application needed
+          - '--mode'    # turn on transparent mode, hence no changes to target application needed
           - 'transparent'
           - '--showhost'
-          - '--ssl_insecure'
+          - 'console-eventlog-verbosity'
+          - 'debug'
+          - '--set'
+          - 'network=host'
+          #- '--network' # https://github.com/mitmproxy/mitmproxy/issues/3236
+          #- 'host'
+          #- listen_host
+          #- 'allow_hosts'
+          #- 'proxy-svc.default.svc.cluster.local'
+          - '--ssl-insecure'
           - 'True'
-          #- '--stream'
-          #- '4096'
-          - '-s'
-          - /opt/mitmproxy-scripts/mitm-script.py
+          #- '--stream-large-bodies'
+          #- '4096m'
+          - '--scripts'
+          - '/opt/mitmproxy-scripts/mitm-script.py'
         volumeMounts:
           #- name: mitmproxy-certs
           #  mountPath: /home/mitmproxy/.mitmproxy

@@ -1,7 +1,11 @@
-FROM alpine:3.11.3
+FROM mitmproxy/mitmproxy:latest
 
-RUN apk add --update iptables curl bash
+RUN mkdir test
+WORKDIR /home/$USER/test
+COPY ./script.py .
 
-COPY start.sh /start.sh
 
-ENTRYPOINT ["/start.sh"]
+EXPOSE 80:80
+EXPOSE 8080:8080
+
+ENTRYPOINT ["/usr/bin/mitmdump", "-s", "./script.py"]

@@ -6,7 +6,7 @@ metadata:
     app: proxy-svc
 spec:
   ports:
-    - name: 8080-8080
+    - name: proxy
       protocol: TCP
       port: 8080
       targetPort: 8080
