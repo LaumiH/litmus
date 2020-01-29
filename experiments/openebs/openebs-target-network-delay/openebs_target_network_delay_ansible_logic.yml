@@ -29,7 +29,7 @@
           # Create test name append with run_id 
         - include_tasks: /utils/runtime/create_testname.yml  
 
-        - include: test_prerequisites.yml
+        - include: openebs_target_network_delay_ansible_prerequisites.yml
 
         - include_vars:
             file: data_persistence.yml
@@ -78,6 +78,8 @@
         - name: Verify that the AUT (Application Under Test) is running
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 5
             retries: 60 
 
@@ -106,6 +108,8 @@
         - name: Verify AUT liveness post fault-injection
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 5
             retries: 60 
             

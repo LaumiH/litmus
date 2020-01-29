@@ -6,6 +6,7 @@
     a_label: "{{ lookup('env','APP_LABEL') }}"
     a_ns: "{{ lookup('env','APP_NAMESPACE') }}"
     c_duration: "{{ lookup('env','TOTAL_CHAOS_DURATION') }}"
+    ramp_time: "{{ lookup('env','RAMP_TIME') }}"
     c_experiment: disk-loss
     cloud_platform: "{{ lookup('env','CLOUD_PLATFORM') }}"
     c_ns: "{{ lookup('env','CHAOS_NAMESPACE') }}"
@@ -14,6 +15,7 @@
     node_name: "{{ lookup('env','NODE_NAME') }}"
     project_id: "{{ lookup('env','PROJECT_ID') }}"
     zone_name: "{{ lookup('env','ZONE_NAME') }}"
+    auxiliary_appinfo: "{{ lookup('env','AUXILIARY_APPINFO') }}"
 
   tasks:
 
@@ -40,9 +42,29 @@
         - name: Verify that the AUT (Application Under Test) is running
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 5
             retries: 60
           when: "a_check == 'true'"
+
+        # Auxiliary application health check status
+        - block:
+
+          - name: Record auxiliary appinfo 
+            set_fact:
+              auxiliary_appinfo_list: "{{ auxiliary_appinfo.split(',') }}"
+
+          - include: /utils/common/status_app_pod.yml
+            vars:
+              app_ns: "{{ item.split(':')[0] }}"
+              app_label: "{{ item.split(':')[1] }}"
+              delay: 5
+              retries: 60
+            with_items:
+              - "{{ auxiliary_appinfo_list }}" 
+
+          when: auxiliary_appinfo is defined and auxiliary_appinfo != ''
 
         # Gcloud authentication
         - name: Gcloud authentication
@@ -80,9 +102,25 @@
         - name: Verify AUT liveness post fault-injection
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 1
             retries: 60   
           when: "a_check == 'true'"
+
+        # Auxiliary application health check status
+        - block:
+
+          - include: /utils/common/status_app_pod.yml
+            vars:
+              app_ns: "{{ item.split(':')[0] }}"
+              app_label: "{{ item.split(':')[1] }}"
+              delay: 5
+              retries: 60
+            with_items:
+              - "{{ auxiliary_appinfo_list }}" 
+
+          when: auxiliary_appinfo is defined and auxiliary_appinfo != ''
 
         ## POST-CHAOS DISK LIVENESS CHECK
         - name: Verify that the disk is connected to node (post)

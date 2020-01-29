@@ -46,6 +46,10 @@ spec:
           - name: TOTAL_CHAOS_DURATION
             value: ''
 
+          # Period to wait before injection of chaos in sec
+          - name: RAMP_TIME
+            value: ''
+
           # Enter the project id for gcp only
           - name: PROJECT_ID 
             value: ''
@@ -65,6 +69,11 @@ spec:
           # Enter the zone name
           - name: ZONE_NAME
             value: '' 
+
+          # provide auxiliary application details - namespace and labels of the applications
+          # sample input is - "ns1:app=percona,ns2:name=nginx"
+          - name: AUXILIARY_APPINFO
+            value: ''
           
           # Enter the chaosengine name
           - name: CHAOSENGINE

@@ -8,7 +8,6 @@
     a_pvc: "{{ lookup('env','APP_PVC') }}"
     c_duration: 600
     c_interval: 5
-    c_engine: "{{ lookup('env','CHAOSENGINE') }}"
     c_experiment: openebs-pool-pod-failure
     c_force: "{{ lookup('env','FORCE') }}"
     c_iterations: "{{ lookup('env','CHAOS_ITERATIONS') }}"
@@ -52,9 +51,9 @@
 
             - name: Construct chaos result name (experiment_name)
               set_fact:
-                c_result: "{{ c_engine }}-{{ c_experiment }}"
+                c_experiment: "{{ lookup('env','CHAOSENGINE') }}-{{ c_experiment }}"
 
-          when: c_engine != ''
+          when: lookup('env','CHAOSENGINE') 
 
         ## RECORD START-OF-TEST IN LITMUS RESULT CR
 
@@ -87,7 +86,8 @@
         - name: Verify that the AUT (Application Under Test) is running
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
-            application_name: "{{ app_pod_name.stdout }}"
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 5
             retries: 60
 
@@ -110,7 +110,8 @@
         - name: Verify AUT liveness post fault-injection
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
-            application_name: "{{ app_pod_name.stdout }}"
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}" 
             delay: 5
             retries: 60
  

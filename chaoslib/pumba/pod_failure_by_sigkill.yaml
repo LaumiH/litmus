@@ -1,12 +1,12 @@
 --- 
-- name: Patch the chaoslib image
-  template:
-    src:  /chaoslib/pumba/pumba.j2
-    dest: /chaoslib/pumba/pumba_kube.yml
-  vars:
-    pumba_image: "{{ lib_image }}"
-
 - block:
+
+    - name: Patch the chaoslib image
+      template:
+        src:  /chaoslib/pumba/pumba.j2
+        dest: /chaoslib/pumba/pumba_kube.yml
+      vars:
+        pumba_image: "{{ lib_image }}"
 
     - name: Setup pumba chaos infrastructure
       shell: >
@@ -14,7 +14,7 @@
         -n {{ namespace }}
       args:
         executable: /bin/bash
-      register: result
+      register: pumba_ds_result
 
       # Verifies pumba ds pods status against Ready Nodes
       # The nested kubectl command returns (via command substitution) a list of Ready nodes: 
@@ -31,7 +31,7 @@
         executable: /bin/bash
       register: result
       until: "result.stdout == 'Running'"
-      delay: 1
+      delay: 2
       retries: 60
       ignore_errors: true
 
@@ -48,7 +48,7 @@
         - name: Record application pod name
           set_fact:
             app_pod_ut: "{{ pod_name.stdout }}"     
-      when: app_pod is undefined
+      when: app_pod is not defined or app_pod == ''
 
     - block: 
 
@@ -56,7 +56,7 @@
           set_fact: 
             app_pod_ut: "{{ app_pod }}"
 
-      when: app_pod is defined 
+      when: app_pod is defined and app_pod != ''
 
     - name: Identify the application node
       shell: >
@@ -81,9 +81,17 @@
 
       - name: Record the app_container
         set_fact:
-          app_container: "{{ container.stdout }}"
+          a_container: "{{ container.stdout }}"
 
-      when: app_container is undefined
+      when: app_container is not defined or app_container == ''
+
+    - block:
+
+      - name: Record the app_container
+        set_fact:
+          a_container: "{{ app_container }}"
+        
+      when: app_container is defined and app_container != ''
 
     - name: Record the pumba pod on app node
       shell: >
@@ -97,15 +105,27 @@
     - name: Record restartCount
       shell: >
         kubectl get pod {{ app_pod_ut }} -n {{ namespace }}
-        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ app_container }}")].restartCount}'
+        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ a_container }}")].restartCount}'
       args:
         executable: /bin/bash
       register: restartCnt_prev
 
+    - name: Confirm that pumba container is in running state 
+      include_tasks: "/utils/common/status_app_pod.yml"
+      vars:
+        app_label: "app=pumba"
+        app_ns: "{{ namespace }}"  
+        delay: 2
+        retries: 60
+
+    - name: Wait for the specified ramp time before injecting chaos
+      wait_for: timeout="{{ ramp_time }}"
+      when: "ramp_time is defined and ramp_time != ''"
+
     - name: Force kill the application pod using pumba
       shell: >
         kubectl exec {{ pumba_pod.stdout}} -n {{ namespace }}
-        -- pumba kill --signal SIGKILL re2:k8s_{{ app_container }}_{{ app_pod_ut }};
+        -- pumba kill --signal SIGKILL re2:k8s_{{ a_container }}_{{ app_pod_ut }};
       args:
         executable: /bin/bash
       ignore_errors: true
@@ -114,7 +134,7 @@
     - name: Verify restartCount
       shell: >
         kubectl get pod {{ app_pod_ut }} -n {{ namespace }}
-        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ app_container }}")].restartCount}'
+        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ a_container }}")].restartCount}'
       args:
         executable: /bin/bash
       register: restartCnt
@@ -122,43 +142,45 @@
       delay: 2
       retries: 60
 
-  when: action == "killapp"
-
-- block:
-
-    - name: Check if pumba is indeed running
+    - name: Tear down pumba infrastructure
       shell: >
-        kubectl get pod -l app=pumba
-        --no-headers -o custom-columns=:status.phase
-        -n {{ namespace }} | sort | uniq
+        kubectl delete -f /chaoslib/pumba/pumba_kube.yml -n {{ namespace }}
+      args:
+        executable: /bin/bash
+
+    - name: Confirm that the pumba job is deleted successfully
+      shell: >
+        kubectl get pods -l app=pumba --no-headers -n {{ namespace }}
       args:
         executable: /bin/bash
       register: result
-      until: "result.stdout == 'Running'"
-      delay: 1
+      until: "'No resources found' in result.stderr"
+      delay: 2
       retries: 60
-      ignore_errors: true
+
+  rescue: 
 
     - block: 
 
-        - name: Delete the pumba daemonset
+        - name: Tear down pumba infrastructure, if setup
           shell: >
             kubectl delete -f /chaoslib/pumba/pumba_kube.yml -n {{ namespace }}
           args:
             executable: /bin/bash
-          register: result
-
-        - name: Confirm that the pumba ds is deleted successfully
+          when: pumba_ds_result.rc == 0
+        
+        - name: Confirm that the pumba job is not present
           shell: >
-            kubectl get pod -l app=pumba
-            --no-headers -n {{ namespace }}
+            kubectl get pods -l app=pumba --no-headers -n {{ namespace }}
           args:
             executable: /bin/bash
           register: result
-          until: "'Running' not in result.stdout"
-          delay: 1
-          retries: 150
+          until: "'No resources found' in result.stderr"
+          delay: 2
+          retries: 60
+      when: "pumba_ds_result is defined"
 
-      when: result.stdout is defined and result.stdout == "Running"
-
-  when: action == "deletepumba"
+    - fail:
+        msg: "pod_failure_by_sigkill lib failed"
+      when: true
+        

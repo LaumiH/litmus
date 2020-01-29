@@ -47,15 +47,15 @@ spec:
             value: ''
 
            # only pumba supported
-           # For pumba image use : gaiaadm/pumba:0.4.8
+           # For pumba image use : gaiaadm/pumba:0.6.5
           - name: LIB_IMAGE  
-            value: 'gaiaadm/pumba:0.4.8' 
+            value: 'gaiaadm/pumba:0.6.5' 
 
           - name: NETWORK_PACKET_LOSS_PERCENTAGE
             value: '100' # in percentage
 
           - name: CHAOS_DURATION
-            value: '240000' # in milliseconds
+            value: '120000' # in milliseconds
 
           - name: LIVENESS_APP_LABEL
             value: ''
@@ -76,4 +76,3 @@ spec:
         - name: parameters
           configMap:
             name: openebs-target-network-loss
-            
