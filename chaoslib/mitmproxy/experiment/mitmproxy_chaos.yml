@@ -57,7 +57,7 @@
 
     - name: Confirm that mitmproxy pod is running
       shell: 
-        kubectl get pod -l name=mitmproxy --no-headers -n {{ app_ns }}
+        kubectl get pod -l app=mitmproxy --no-headers -n {{ app_ns }}
       args:
         executable: /bin/bash
       register: result
@@ -118,7 +118,7 @@
       k8s_facts:
         kind: Job
         label_selectors:
-          - name=mitmproxy
+          - app=mitmproxy
       register: resource_deployment
       until: "resource_deployment.resources | length < 1"
       delay: 1
