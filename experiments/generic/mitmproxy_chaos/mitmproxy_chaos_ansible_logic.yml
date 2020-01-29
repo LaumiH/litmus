@@ -10,7 +10,7 @@
     a_name: "{{ lookup('env','APP_NAME') }}"
     c_container: "{{ lookup('env','TARGET_CONTAINER') }}"
     #c_configmap: "{{ lookup('env','CONFIG_MAP') }}"
-    c_util: /chaoslib/mitmproxy/mitmproxy_chaos.yml
+    c_util: "/chaoslib/mitmproxy/experiment/mitmproxy_chaos.yml"
     lib_image: "{{ lookup('env','LIB_IMAGE') }}"
     c_duration: "{{ lookup('env','TOTAL_CHAOS_DURATION') }}"
     
