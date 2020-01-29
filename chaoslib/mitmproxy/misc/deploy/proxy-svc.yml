@@ -1,0 +1,16 @@
+apiVersion: v1
+metadata:
+  name: proxy-svc
+  namespace: default
+  labels:
+    app: proxy-svc
+spec:
+  ports:
+    - name: proxy
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: mitmproxy
+  type: ClusterIP
+kind: Service

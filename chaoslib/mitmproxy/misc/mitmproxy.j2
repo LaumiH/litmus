@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mitmproxy
+spec:
+  selector:
+    matchLabels:
+      app: mitmproxy
+  template:
+    metadata:
+      labels:
+        app: mitmproxy
+      name: mitmproxy
+    spec:
+      containers:
+      - name: mitmproxy-transparent
+        image: mitmproxy/mitmproxy:5.0.0
+        #tty: true
+        #securityContext:
+        #  runAsUser: 100
+        ports:
+        - containerPort: 8080
+          hostPort: 8080
+          protocol: TCP
+        args:
+        - --mode 
+        - 'transparent'
+        - --showhost
+        command:
+        - mitmdump
+        #- '-p'
+        #- '8080'
+        #- '-T'
+        #- '--host'
+        #- '--insecure'
+        #- '--stream'
+        #- '4096'
+        - '-s'
+        - /opt/mitmproxy-scripts/mitm-script.py
+        volumeMounts:
+          - name: mitmproxy-certs
+            mountPath: /home/mitmproxy/.mitmproxy
+          - name: app-data
+            mountPath: /opt/mitmproxy-scripts/
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        #hostNetwork: true
+      volumes:
+      - name: mitmproxy-certs
+        secret:
+          secretName: mitmproxy-certs
+      - name: app-data
+        configMap:
+          name: mitmproxy
+          items:
+          - key: mitm-script.py
+            path: mitm-script.py

@@ -1,0 +1,58 @@
+https://github.com/mitmproxy/mitmproxy/tree/master/examples/simple
+-> examplex for scripts that can induce some kind of chaos
+
+the plan is to use the transparent functionality of mitmproxy and install it as a daemonset on all nodes.
+then the target containers have to be configured to have http and https proxy over mitmproxy-pod on their node.
+if https is used, certificates have to be installed on the target container, otherwise it will not trust the proxy.
+this could be done via configmap.
+
+https://docs.mitmproxy.org/stable/tools-mitmdump/ is the CLI tool for the proxy. idea: setup proxy pod and run
+a script with mitmdump -s script.py
+
+https://mitmproxy.readthedocs.io/en/v2.0.2/transparent/linux.html explains how transparent mode is net up
+https://docs.mitmproxy.org/stable/howto-transparent/
+
+
+https://github.com/ii/kube-apisnoop/tree/master/charts/tproxy
+
+for starting a docker container with a proxy:
+args:
+  - "-http_proxy=mitmproxy"
+
+change the default gateway on linux:
+ip route del default 
+ip route add default via 192.168.130.3
+
+
+kubectl set env
+env:
+- name: NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+- name: http_proxy
+  value: $(NODE_NAME):1080
+- name: https_proxy
+  value: $(NODE_NAME):1080
+  
+kubectl set env deployment/busy1 --containers="busy-1" --list
+kubectl set env deployment/busy1 --containers="busy-1" http_proxy=http://10.96.165.59:8080
+kubectl set env deployment/busy1 --containers="busy-1" https_proxy=http://10.96.165.59:8080
+
+kubectl set env deployment/busy1 --containers="busy-1" https_proxy-
+
+$ http_proxy=http://localhost:8080/ curl http://example.com/
+$ https_proxy=http://localhost:8080/ curl -k https://example.com/
+
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump --set script=/home/mitmdump/.mitmdump/script.py     -> script has no effect
+
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump --set mode=transparent                  -> Transparent mode failure: FileNotFoundError(2, 'No such file or directory')
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s /home/mitmdump/.mitmdump/script.py   -> /usr/bin/mitmdump: No such script
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s '~/mitmproxy/.mitmproxy/script.py'   -> /usr/bin/mitmdump: No such script
+sudo docker run --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 8080:8080 mitmproxy/mitmproxy:latest -- mitmdump -s 'script.py'                          -> /usr/bin/mitmdump: No such script
+
+
+https://stackoverflow.com/questions/31272002/running-docker-container-through-mitmproxy/31300746#31300746
