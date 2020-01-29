@@ -8,9 +8,6 @@ spec:
       labels:
         app: mitmproxy
     spec:
-      selector:
-        matchLabels:
-          app: mitmproxy
       restartPolicy: Never
       containers:
       - image: mitmproxy/mitmproxy:latest

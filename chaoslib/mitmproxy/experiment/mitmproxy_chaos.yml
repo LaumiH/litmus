@@ -49,7 +49,7 @@
       
     - name: Add the mitmproxy service to access the pod
       shell:
-        kubectl apply -f proxy-svc.yml -n {{ app_ns }}
+        kubectl apply -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
       args:
         executable: /bin/bash
       register: svc_deployment_result
@@ -108,7 +108,7 @@
       
     - name: Tear down the mitmproxy deployment and service
       shell: 
-        kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}; kubectl delete -f proxy-svc.yml -n {{ app_ns }}
+        kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}; kubectl delete -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
       args:
         executable: /bin/bash
       register: result
