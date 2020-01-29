@@ -1,16 +1,17 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: mitmproxy
+  name: mitmproxy-{{ rin_id }}
 spec:
-  selector:
-    matchLabels:
-      app: mitmproxy
   template:
     metadata:
       labels:
         app: mitmproxy
     spec:
+      selector:
+        nodeSelector:
+          kubernetes.io/hostname: {{ app_node }}
+      restartPolicy: Never
       containers:
       - image: mitmproxy/mitmproxy:latest
         imagePullPolicy: Always
@@ -19,7 +20,11 @@ spec:
           - containerPort: 8080
             protocol: TCP
         command: ["/usr/bin/mitmdump"]
-        args: ["-s", "/scripts/script.py", "{{ args }}"]
+{% if args is defined and args != '' %}
+        args: ["-s", "/scripts/script.py {{ args }}"]
+{% else %}
+        args: ["-s", "/scripts/script.py"]
+{% endif%}
         resources:
           requests:
             cpu: 10m
@@ -34,5 +39,4 @@ spec:
         - name: script
           configMap:
             name: mitmproxy-conf
-            # name: {{ c_configmap }}
             defaultMode: 0744   # makes script executable
