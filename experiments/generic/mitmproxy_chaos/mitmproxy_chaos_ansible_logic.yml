@@ -7,8 +7,10 @@
     a_ns: "{{ lookup('env','APP_NAMESPACE') }}"
     a_label: "{{ lookup('env','APP_LABEL') }}"
     a_kind: "{{ lookup('env','APP_KIND') }}"
+    a_name: "{{ lookup('env','APP_NAME') }}"
     c_container: "{{ lookup('env','TARGET_CONTAINER') }}"
-    c_configmap: "{{ lookup('env','CONFIG_MAP') }}"
+    #c_configmap: "{{ lookup('env','CONFIG_MAP') }}"
+    c_util: /chaoslib/mitmproxy/mitmproxy_chaos.yml
     lib_image: "{{ lookup('env','LIB_IMAGE') }}"
     c_duration: "{{ lookup('env','TOTAL_CHAOS_DURATION') }}"
     
@@ -41,6 +43,8 @@
         - include_tasks: "{{ c_util }}"
           vars:
             app_ns: "{{ a_ns }}"
+            app_name: "{{ a_name }}"
+            c_name: "{{ c_container }}"
 
         ## POST-CHAOS APPLICATION LIVENESS CHECK
         - name: Verify AUT liveness post fault-injection

@@ -1,0 +1,4 @@
+- name: Identify the chaos variables that are needed
+  template:
+    src: chaosvars.j2
+    dest: chaosvars.yml

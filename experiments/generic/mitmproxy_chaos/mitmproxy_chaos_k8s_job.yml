@@ -25,21 +25,25 @@ spec:
           - name: APP_NAMESPACE
             value: ''
 
-          # provide application labels
-          - name: APP_LABEL
-            value: ''
-
           # provide application kind, for supported see kubectl set env docu
           - name: APP_KIND
             value: ''
+            
+          # provide application label
+          - name: APP_LABEL
+            value: ''
+            
+          # provide application name
+          - name: APP_NAME
+            value: ''
 
-          # provide target container
+          # provide target container (optional)
           - name: TARGET_CONTAINER
             value: ''
 
-          # provide ConfigMap with python script
-          - name: CONFIG_MAP
-            value: ''
+          # provide if custom mitmproxy script is used
+          #- name: CUSTOM_SCRIPT
+          #  value: 'false'
 
           - name: TOTAL_CHAOS_DURATION
             value: '60000' # in ms
