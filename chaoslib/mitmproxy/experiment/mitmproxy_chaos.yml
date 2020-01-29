@@ -94,7 +94,8 @@
       failed_when: "env_result.rc != 0"
     
     - name: Wait for chaos duration
-      wait_for: timeout="{{ c_duration }}"
+      pause: 
+        milliseconds: "{{ c_duration }}"
 
     - name: Delete targets' http(s)_proxy env variables
       shell: 
