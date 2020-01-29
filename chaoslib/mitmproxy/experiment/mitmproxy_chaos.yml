@@ -95,7 +95,7 @@
     
     - name: Wait for chaos duration
       pause: 
-        milliseconds: "{{ c_duration }}"
+        seconds: "{{ ((c_duration|int)/1000)|int }}"
 
     - name: Delete targets' http(s)_proxy env variables
       shell: 
