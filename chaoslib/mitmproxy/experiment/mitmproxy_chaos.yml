@@ -132,9 +132,7 @@
 
       - name: Tear down the mitmproxy deployment and service
         shell: 
-          #kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}; 
-          kubectl delete jobs,services -l app=mitmproxy
-          #kubectl delete svc -l app=mitmproxy
+          kubectl delete jobs,services -l app=mitmproxy -n {{ app_ns }}
         args:
           executable: /bin/bash
         register: result
@@ -156,8 +154,7 @@
 
         - name: Tear down the mitmproxy deployment
           shell: 
-            #kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}
-            kubectl delete jobs,services -l app=mitmproxy
+            kubectl delete jobs,services -l app=mitmproxy -n {{ app_ns }}
           args:
             executable: /bin/bash
           when: deployment_result.rc == 0
