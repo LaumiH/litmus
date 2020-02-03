@@ -1,7 +1,8 @@
 ---
 - block:
+
     - block:
-    
+
       - name: Record app resource to be targeted
         set_fact:
           app_kind: "{{ a_kind }}"
@@ -12,7 +13,7 @@
       
       
     - block:
-      
+
       - name: Generate a run id if not passed from the engine/experiment
         shell: echo $(mktemp) | cut -d '.' -f 2
         register: rand_string
@@ -21,115 +22,133 @@
           run_id: "{{ rand_string.stdout | lower }}"
           
       when: "run_id is not defined or run_id == ''"
-    
-    - block:
-    
-      - name: Record the target container if specified
-        set_fact: 
-          c_name: "{{ c_name }}"
-    
+
+
+    - name: Record the target container if specified
+      set_fact: 
+        c_name: "{{ c_name }}"
     
     - name: Wait for the specified ramp time before injecting chaos
       wait_for: timeout= "{{ ramp_time }}"
       when: "ramp_time is defined and ramp_time != ''"
     
-    
-    - name: Generate the mitmproxy deployment spec from template
-      template:
-        src: /chaoslib/mitmproxy/experiment/mitmproxy_job.j2
-        dest: mitmproxy_job.yml
+    - block:
 
-    - name: Setup mitmproxy 
-      shell:
-        kubectl apply -f mitmproxy_job.yml -n {{ app_ns }}
-      args:
-        executable: /bin/bash
-      register: job_deployment_result
-      failed_when: "job_deployment_result.rc != 0"
+      - name: Generate the mitmproxy deployment spec from template
+        template:
+          src: /chaoslib/mitmproxy/experiment/mitmproxy_job.j2
+          dest: mitmproxy_job.yml
+
+      - name: Setup mitmproxy 
+        shell:
+          kubectl apply -f mitmproxy_job.yml -n {{ app_ns }}
+        args:
+          executable: /bin/bash
+        register: job_deployment_result
+        failed_when: "job_deployment_result.rc != 0"
+
+      - name: Confirm that mitmproxy pod is running
+        shell: 
+          kubectl get pod -l app=mitmproxy --no-headers -n {{ app_ns }}
+        args:
+          executable: /bin/bash
+        register: result
+        until: "'Running' in result.stdout"
+        delay: 1
+        retries: 90
+
+      - name: Expose the mitmproxy pod
+        shell: 
+          kubectl apply -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
+        #POD=$(kubectl get pod -l app=mitmproxy -o name);
+        #kubectl expose $POD --protocol=TCP --target-port=8080 --port={{ svc_port }} --name=mitmproxy-svc-{{ run_id }} --type=ClusterIP
+        args:
+          executable: /bin/bash
+        register: svc_deployment_result
+        failed_when: "svc_deployment_result.rc != 0"
+
+    - block:    
       
-    - name: Add the mitmproxy service to access the pod
-      shell:
-        kubectl apply -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
-      args:
-        executable: /bin/bash
-      register: svc_deployment_result
-      failed_when: "svc_deployment_result.rc != 0"
+      - name: Save target's http_proxy env variable (if existent)
+        shell: 
+          kubectl set env {{ app_kind }}/{{ app_name }} --list | grep http_proxy | cut -d '=' -f2
+        args:
+          executable: /bin/bash
+        register: http_env
 
-    - name: Confirm that mitmproxy pod is running
-      shell: 
-        kubectl get pod -l app=mitmproxy --no-headers -n {{ app_ns }}
-      args:
-        executable: /bin/bash
-      register: result
-      until: "'Running' in result.stdout"
-      delay: 1
-      retries: 90
+      - set_fact:
+          http_env: "{{ http_env.stdout }}"
+          
+      - name: Save target's https_proxy env variable (if existent)
+        shell: 
+          kubectl set env {{ app_kind }}/{{ app_name }} --list | grep https_proxy | cut -d '=' -f2
+        args:
+          executable: /bin/bash
+        register: https_env
+
+      - set_fact:
+          https_env: "{{ https_env.stdout }}"
       
-    - name: Save target's http_proxy env variable (if existent)
-      shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} --list | grep http_proxy | cut -d '=' -f2
-      args:
-        executable: /bin/bash
-      register: http_env
-
-    - set_fact:
-        http_env: "{{ http_env.stdout }}"
-        
-    - name: Save target's https_proxy env variable (if existent)
-      shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} --list | grep https_proxy | cut -d '=' -f2
-      args:
-        executable: /bin/bash
-      register: https_env
-
-    - set_fact:
-        https_env: "{{ https_env.stdout }}"
-    
-    - name: Register proxy-svc clusterIP
-      shell: kubectl get services proxy-svc -o yaml | grep clusterIP | cut -d ':' -f2
-      args:
-        executable: /bin/bash
-      register: svc_ip
-
-    - name: Edit targets' http(s)_proxy env variables
-      shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ svc_ip }}:8080; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ svc_ip }}:8080
-      args:
-        executable: /bin/bash
-      register: env_result
-      failed_when: "env_result.rc != 0"
-    
-    - name: Wait for chaos duration
-      pause: 
-        seconds: "{{ ((c_duration|int)/1000)|int }}"
-
-    - name: Delete targets' http(s)_proxy env variables
-      shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} http_proxy-; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy-
-        
-    - name: Restore targets' http(s)_proxy env variables if existent
-      shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ http_env }}; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ https_env }}
-      when: ("http_env" is defined and "http_env" != '') and
-            ("https_env" is defined and "https_env" != '')
+      - name: Register proxy-svc clusterIP
+        shell: kubectl get services mitmproxy-svc -o yaml | grep clusterIP | cut -d ' ' -f4
+        args:
+          executable: /bin/bash
+        register: svc_ip
+        failed_when: "svc_ip.stdout == ''"
       
-    - name: Tear down the mitmproxy deployment and service
-      shell: 
-        kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}; kubectl delete -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
-      args:
-        executable: /bin/bash
-      register: result
-      failed_when: "result.rc != 0"
+      - set_fact:
+          svc_ip: "{{ svc_ip.stdout }}"
 
-    - name: Confirm that mitmproxy pod is cleaned up
-      k8s_facts:
-        kind: Job
-        label_selectors:
-          - app=mitmproxy
-      register: resource_deployment
-      until: "resource_deployment.resources | length < 1"
-      delay: 1
-      retries: 120
+    #- name: Pause target app (only for deployments ...)
+
+      - name: Edit targets' http(s)_proxy env variables
+        shell: >
+          kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ svc_ip }}:8080; 
+          kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ svc_ip }}:8080
+        args:
+          executable: /bin/bash
+        register: env_result
+        failed_when: "env_result.rc != 0"
+    
+      - name: Wait for chaos duration
+        pause: 
+          seconds: "{{ ((c_duration|int)/1000)|int }}"
+
+    - block:
+
+      - name: Delete targets' http(s)_proxy env variables
+        shell: >
+          kubectl set env {{ app_kind }}/{{ app_name }} http_proxy-; 
+          kubectl set env {{ app_kind }}/{{ app_name }} https_proxy-
+          
+      - name: Restore targets' http(s)_proxy env variables if existent
+        shell: >
+          kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ http_env }}; 
+          kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ https_env }}
+        when: ("http_env" is defined and "http_env" != '') and
+              ("https_env" is defined and "https_env" != '')
+      
+    - block:
+
+      - name: Tear down the mitmproxy deployment and service
+        shell: 
+          #kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}; 
+          kubectl delete jobs,services -l app=mitmproxy
+          #kubectl delete svc -l app=mitmproxy
+        args:
+          executable: /bin/bash
+        register: result
+        failed_when: "result.rc != 0"
+
+      - name: Confirm that mitmproxy pod is cleaned up
+        k8s_facts:
+          kind: Job
+          label_selectors:
+            - app=mitmproxy
+        register: resource_deployment
+        until: "resource_deployment.resources | length < 1"
+        delay: 1
+        retries: 120
 
   rescue:
 
@@ -137,7 +156,8 @@
 
         - name: Tear down the mitmproxy deployment
           shell: 
-            kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}
+            #kubectl delete -f mitmproxy_job.yml -n {{ app_ns }}
+            kubectl delete jobs,services -l app=mitmproxy
           args:
             executable: /bin/bash
           when: deployment_result.rc == 0

@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: mitmproxy-chaos- 
+  generateName: mitmproxy-chaos-
 spec:
   template:
     metadata:
@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: ansibletest
-        image: "ansible-runner:v1"
+        image: "ansible-runner:v2"
         imagePullPolicy: Never
         env: 
           - name: ANSIBLE_STDOUT_CALLBACK
@@ -40,6 +40,10 @@ spec:
           # provide target container (optional)
           - name: TARGET_CONTAINER
             value: ''
+
+          # provide port at which proxy is exposed
+          - name: PROXY_PORT
+            value: '8080'
 
           # provide if custom mitmproxy script is used
           #- name: CUSTOM_SCRIPT
