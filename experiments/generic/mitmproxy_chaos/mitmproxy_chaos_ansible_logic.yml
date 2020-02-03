@@ -13,6 +13,7 @@
     c_util: "/chaoslib/mitmproxy/experiment/mitmproxy_chaos.yml"
     lib_image: "{{ lookup('env','LIB_IMAGE') }}"
     c_duration: "{{ lookup('env','TOTAL_CHAOS_DURATION') }}"
+    svc_proxy_port: "{{ lookup('env','PROXY_PORT') }}"
     
   tasks:
     - block:
@@ -45,6 +46,7 @@
             app_ns: "{{ a_ns }}"
             app_name: "{{ a_name }}"
             c_name: "{{ c_container }}"
+            svc_port: "{{ svc_proxy_port }}"
 
         ## POST-CHAOS APPLICATION LIVENESS CHECK
         - name: Verify AUT liveness post fault-injection

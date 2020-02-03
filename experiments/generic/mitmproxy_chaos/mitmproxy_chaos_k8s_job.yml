@@ -41,6 +41,10 @@ spec:
           - name: TARGET_CONTAINER
             value: ''
 
+          # provide port at which proxy is exposed
+          - name: PROXY_PORT
+            value: '8080'
+
           # provide if custom mitmproxy script is used
           #- name: CUSTOM_SCRIPT
           #  value: 'false'
