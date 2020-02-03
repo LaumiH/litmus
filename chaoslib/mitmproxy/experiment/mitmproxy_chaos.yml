@@ -60,6 +60,7 @@
       - name: Expose the mitmproxy pod
         shell: 
           kubectl apply -f /chaoslib/mitmproxy/experiment/proxy-svc.yml -n {{ app_ns }}
+        #does not work, see issue https://github.com/kubernetes/kubernetes/issues/87771
         #POD=$(kubectl get pod -l app=mitmproxy -o name);
         #kubectl expose $POD --protocol=TCP --target-port=8080 --port={{ svc_port }} --name=mitmproxy-svc-{{ run_id }} --type=ClusterIP
         args:
