@@ -1,9 +1,9 @@
 apiVersion: v1
 metadata:
-  name: proxy-svc
+  name: mitmproxy-svc
   namespace: default
   labels:
-    app: proxy-svc
+    app: mitmproxy
 spec:
   ports:
     - name: proxy
