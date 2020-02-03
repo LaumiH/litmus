@@ -85,9 +85,15 @@
     - set_fact:
         https_env: "{{ https_env.stdout }}"
     
+    - name: Register proxy-svc clusterIP
+      shell: kubectl get services proxy-svc -o yaml | grep clusterIP | cut -d ':' -f2
+      args:
+        executable: /bin/bash
+      register: svc_ip
+
     - name: Edit targets' http(s)_proxy env variables
       shell: 
-        kubectl set env {{ app_kind }}/{{ app_name }} http_proxy=svc-ip:8080; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy=svc-ip:8080
+        kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ svc_ip }}:8080; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ svc_ip }}:8080
       args:
         executable: /bin/bash
       register: env_result
@@ -104,7 +110,7 @@
     - name: Restore targets' http(s)_proxy env variables if existent
       shell: 
         kubectl set env {{ app_kind }}/{{ app_name }} http_proxy={{ http_env }}; kubectl set env {{ app_kind }}/{{ app_name }} https_proxy={{ https_env }}
-      when: ("http_env" is defined and "http_env" != '') or
+      when: ("http_env" is defined and "http_env" != '') and
             ("https_env" is defined and "https_env" != '')
       
     - name: Tear down the mitmproxy deployment and service
