@@ -24,6 +24,9 @@
     zk_label: "{{ lookup('env','ZOOKEEPER_LABEL') }}"
     zk_service: "{{ lookup('env','ZOOKEEPER_SERVICE') }}"
     zk_port: "{{ lookup('env','ZOOKEEPER_PORT') }}" 
+    c_engine: "{{ lookup('env','CHAOSENGINE') }}"
+    chaos_pod_name: "{{ lookup('env','POD_NAME') }}"
+    chaos_uid: "{{ lookup('env','CHAOS_UID') }}"
 
   tasks:
     - block:
@@ -34,13 +37,10 @@
             file: chaosutil.yml
 
         ## GENERATE EXP RESULT NAME
-        - block:
-
-            - name: Construct chaos result name (experiment_name)
-              set_fact:
-                c_experiment: "{{ lookup('env','CHAOSENGINE') }}-{{ c_experiment }}"
-
-          when: lookup('env','CHAOSENGINE')    
+        - name: Construct chaos result name
+          set_fact:
+            c_result: "{{ c_engine }}-{{ c_experiment }}"
+          when: "c_engine is defined and c_engine != ''"
 
         ## RECORD START-OF-EXPERIMENT IN LITMUSCHAOS RESULT CR
         - include_tasks: /utils/runtime/update_chaos_result_resource.yml
@@ -64,8 +64,17 @@
         - name: Verify that the Kafka cluster is healthy
           include_tasks: "/utils/apps/kafka/kafka_cluster_health.yml"
           vars:     
-            delay: 1
-            retries: 60
+            delay: 2
+            retries: 90
+
+        ## RECORD EVENT FOR PRE-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+        vars:
+          stage: "PreChaosCheck"
+          exp_pod_name: "{{ chaos_pod_name }}"
+          engine_ns: "{{ a_ns }}"
+          message: "AUT is Running successfully"
+        when: "c_engine is defined and c_engine != ''"
 
         - name: Derive the kafka-broker node name
           shell: 
@@ -83,11 +92,11 @@
 
         - debug: 
             msg: "specified disk is attached to node"   
-          when: "inuse == true"
+          when: "inuse is defined and inuse == true"
 
         - fail:
             msg: "specified disk not attached to node"
-          when: "inuse == false"   
+          when: "inuse is defined and inuse == false"   
  
         ## SETUP KAFKA CHAOS INFRA (LIVENESS CLIENT)
        
@@ -118,8 +127,17 @@
               vars: 
                 app_ns: "{{ kafka_ns }}"
                 app_label: "name=kafka-liveness" 
-                delay: 1
-                retries: 60
+                delay: 2
+                retries: 90
+
+            ## RECORD EVENT FOR POST-CHAOS CHECK
+            - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+              vars:
+                stage: "PostChaosCheck"
+                exp_pod_name: "{{ chaos_pod_name }}"
+                engine_ns: "{{ a_ns }}"
+                message: "Disk has been reattached and AUT is Running successfully"
+              when: "c_engine is defined and c_engine != ''"
 
             - include_tasks: "/utils/apps/kafka/kafka_liveness_cleanup.yml"
 
@@ -133,28 +151,30 @@
 
         - debug: 
             msg: "specified disk is attached to node"   
-          when: "inuse == true"
+          when: "inuse is defined and inuse == true"
 
         - fail:
             msg: "specified disk not re-attached to kafka-broker node"
-          when: "inuse == false"   
+          when: "inuse is defined and inuse == false"   
 
         - set_fact:
-            flag: "pass"
+            flag: "Pass"
 
       rescue: 
         - set_fact: 
-            flag: "fail"
+            flag: "Fail"
 
         - name: Cleanup kafka liveness pods if present
           include_tasks: "/utils/apps/kafka/kafka_liveness_cleanup.yml"
           ignore_errors: true
 
       always: 
+      
+        ## Getting failure step from experiment-pod
+        - include_tasks: /utils/runtime/getting_failure_step.yml  
  
         ## RECORD END-OF-TEST IN LITMUSCHAOS RESULT CR
         - include_tasks: /utils/runtime/update_chaos_result_resource.yml
           vars:
             status: 'EOT'
             namespace: "{{ kafka_ns }}"
-

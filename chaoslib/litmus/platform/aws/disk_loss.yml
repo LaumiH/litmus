@@ -2,6 +2,15 @@
   wait_for: timeout="{{ ramp_time }}"
   when: "ramp_time is defined and ramp_time != ''"
 
+## RECORD EVENT FOR CHAOS INJECTION
+- include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+  vars:
+    stage: "ChaosInject"
+    exp_pod_name: "{{ chaos_pod_name }}"
+    engine_ns: "{{ a_ns }}"
+    message: "Injecting {{ c_experiment }} chaos on {{ disk_name }} disk"
+  when: "c_engine is defined and c_engine != ''"
+
 - name: Detaching the disk
   ec2_vol:
     id: "{{ disk_name }}"
@@ -22,4 +31,8 @@
         id: "{{ disk_name }}"
         device_name: "{{ device_name }}"
         region: "{{ zone_name }}"
-  when: "inuse == false"
+  when: "inuse is defined and inuse == false"
+
+- name: Wait for the specified ramp time after injecting chaos
+  wait_for: timeout="{{ ramp_time }}"
+  when: "ramp_time is defined and ramp_time != ''" 

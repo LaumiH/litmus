@@ -1,26 +1,36 @@
-
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: pumba
+  name: pumba-sig-kill-{{ run_id }}
+  labels: 
+    app: pumba
+{% if chaos_uid is defined and chaos_uid != '' %}  
+    chaosUID: {{ chaos_uid }}
+{% endif %}
 spec:
-  selector:
-    matchLabels:
-      app: pumba
   template:
     metadata:
       labels:
         app: pumba
-        com.gaiaadm.pumba: "true" # prevent pumba from killing itself
-      name: pumba
+{% if chaos_uid is defined and chaos_uid != '' %}
+        chaosUID: {{ chaos_uid }}
+{% endif %}
+        # prevent pumba from killing itself
+        com.gaiaadm.pumba: "true"
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: {{ app_node }}
+      restartPolicy: Never
       containers:
       - image: {{ pumba_image }}
         imagePullPolicy: Always
         name: pumba
-        # Pumba command: modify it to suite your needs
-        # Dry run: Randomly try to kill some container every 3 minutes
-        command: ["pumba", "--dry", "--random", "--interval", "3m", "kill", "--signal", "SIGTERM"]
+        args:
+          - pumba
+          - kill 
+          - --signal
+          - SIGKILL
+          - re2:k8s_{{ app_container }}_{{ app_pod }} 
         resources:
           requests:
             cpu: 10m

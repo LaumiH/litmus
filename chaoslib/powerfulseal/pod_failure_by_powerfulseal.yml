@@ -3,12 +3,30 @@
     - name: Wait for the specified ramp time before injecting chaos
       wait_for: timeout="{{ ramp_time }}"
       when: "ramp_time is defined and ramp_time != ''"
+
+     ## RECORD EVENT FOR CHAOS INJECTION
+    - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+      vars:
+        stage: "ChaosInject"
+        exp_pod_name: "{{ chaos_pod_name }}"
+        engine_ns: "{{ a_ns }}"
+        message: "Injecting {{ c_experiment }} chaos on application pod"
+      when: "c_engine is defined and c_engine != ''"
+
+    - block:
+        - name: Generate a run id if not passed from the engine/experiment
+          shell: echo $(mktemp) | cut -d '.' -f 2 | cut -c -6
+          register: rand_string   
+
+        - set_fact:
+            run_id: "{{ rand_string.stdout | lower }}"
+      when: "run_id is not defined or run_id == ''"
     
     - name: Generate the powerfulseal deployment spec from template
       template:
         src: /chaoslib/powerfulseal/powerfulseal.j2
         dest: powerfulseal.yml
-
+      
     - name: Setup powerfulseal to initiate random pod chaos 
       shell:
         kubectl apply -f powerfulseal.yml -n {{ app_ns }}
@@ -19,16 +37,20 @@
 
     - name: Confirm that powerfulseal pod is running
       shell: >
-        kubectl get pod -l name=powerfulseal --no-headers -n {{ app_ns }}
+        kubectl get pod -l name=powerfulseal-{{ run_id }} --no-headers -n {{ app_ns }}
       args:
         executable: /bin/bash
       register: result
       until: "'Running' in result.stdout"
-      delay: 1
+      delay: 2
       retries: 90
     
     - name: Wait for chaos duration
       wait_for: timeout="{{ c_duration }}"
+
+    - name: Wait for the specified ramp time after injecting chaos
+      wait_for: timeout="{{ ramp_time }}"
+      when: "ramp_time is defined and ramp_time != ''"
 
     - name: Tear down the powerfulseal deployment
       shell: 
@@ -42,11 +64,11 @@
       k8s_facts:
         kind: Deployment
         label_selectors:
-          - name=powerfulseal
+          - name=powerfulseal-{{ run_id }}
       register: resource_deployment
       until: "resource_deployment.resources | length < 1"
-      delay: 1
-      retries: 120
+      delay: 2
+      retries: 90
 
   rescue:
 
@@ -63,11 +85,11 @@
           k8s_facts:
             kind: Deployment
             label_selectors:
-              - name=powerfulseal
+              - name=powerfulseal-{{ run_id }}
           register: resource_deployment
           until: "resource_deployment.resources | length < 1"
-          delay: 1
-          retries: 120
+          delay: 2
+          retries: 90
 
       when: "deployment_result is defined"
 

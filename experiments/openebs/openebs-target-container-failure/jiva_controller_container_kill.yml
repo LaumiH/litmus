@@ -15,7 +15,7 @@
   register: restartCount_before
 
 # including pumba chaoslib - pod-failure-by-sigkill
-- include_tasks: /chaoslib/pumba/pod_failure_by_sigkill.yaml
+- include_tasks: /chaoslib/pumba/pod_failure_by_sigkill.yml
   vars:
     app_pod: "{{ jiva_controller_pod.stdout }}"
     namespace: "{{ a_ns }}"
@@ -37,8 +37,8 @@
     executable: /bin/bash
   register: result
   until: "result.stdout == 'Running'"
-  delay: 5
-  retries: 45
+  delay: 2
+  retries: 90
 
 - name: Check for controller container status
   shell: >
@@ -49,8 +49,8 @@
     executable: /bin/bash
   register: runningStatusCount
   until: "runningStatusCount.stdout == \"2\""
-  delay: 30
-  retries: 10
+  delay: 2
+  retries: 90
 
 - name: Get the restartCount of ctrl-con container
   shell: >

@@ -34,9 +34,8 @@ spec:
           - name: KAFKA_CONSUMER_TIMEOUT
             value: '30000'
 
-          # in milliseconds  
           - name: TOTAL_CHAOS_DURATION
-            value: '60000'
+            value: '60'  # in seconds
 
           - name: TARGET_CONTAINER
             value: 'k8skafka'
@@ -89,9 +88,6 @@ spec:
           - name: LIB_IMAGE
             value: 'gaiaadm/pumba:0.6.5'
 
-          - name: CHAOSENGINE
-            value: ''
-
           - name: CHAOS_SERVICE_ACCOUNT
             valueFrom:
               fieldRef:
@@ -99,4 +95,3 @@ spec:
 
         command: ["/bin/bash"]
         args: ["-c", "ansible-playbook ./experiments/kafka/kafka-broker-network-latency/kafka-broker-network-latency-ansible-logic.yml -vv -i /etc/ansible/hosts; exit 0"]
-

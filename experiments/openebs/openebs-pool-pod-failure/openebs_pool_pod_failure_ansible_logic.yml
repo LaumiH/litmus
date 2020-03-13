@@ -16,6 +16,9 @@
     liveness_namespace: "{{ lookup('env','LIVENESS_APP_NAMESPACE') }}"
     openebs_ns: openebs
     pool_debug_msg: 'uncorrectable I/O failure|suspended|ERROR ZFS event'
+    c_engine: "{{ lookup('env','CHAOSENGINE') }}"
+    chaos_pod_name: "{{ lookup('env','POD_NAME') }}"
+    chaos_uid: "{{ lookup('env','CHAOS_UID') }}"
    
   vars_files:
     - /mnt/parameters.yml
@@ -24,36 +27,40 @@
   tasks:
     - block:
 
-         ## PRE-CHAOS APPLICATION LIVENESS CHECK
-
-        - include_tasks: /utils/common/application_liveness_check.yml
-          when: liveness_label != ''
-
-        - name: Identify the data consistency util to be invoked
-          template:
-            src: data_persistence.j2
-            dest: data_persistence.yml
-
-        - include_vars:
-            file: data_persistence.yml
-
-        - name: Record the chaos util path
-          set_fact:
-            chaos_util_path: "/experiments/openebs/openebs-pool-pod-failure/cstor_pool_delete.yml"
-
-        - name: Record the data consistency util path
-          set_fact:
-            data_consistency_util_path: "{{ consistencyutil }}"
-          when: data_persistence != ''
-
-        ## GENERATE EXP RESULT NAME
         - block:
 
-            - name: Construct chaos result name (experiment_name)
-              set_fact:
-                c_experiment: "{{ lookup('env','CHAOSENGINE') }}-{{ c_experiment }}"
+            ## PRE-CHAOS APPLICATION LIVENESS CHECK
+            - include_tasks: /utils/common/application_liveness_check.yml
+              when: "liveness_label != ''"
 
-          when: lookup('env','CHAOSENGINE') 
+            - name: Identify the data consistency util to be invoked
+              template:
+                src: data_persistence.j2
+                dest: data_persistence.yml
+
+            - include_vars:
+                file: data_persistence.yml
+
+            - name: Record the data consistency util path
+              set_fact:
+                data_consistency_util_path: "{{ consistencyutil }}"
+              when: data_persistence != ''
+
+          when: "a_pvc is defined and a_pvc != ''"
+
+        - name: Identify the chaos util to be invoked 
+          template:
+            src: chaosutil.j2
+            dest: chaosutil.yml
+
+        - include_vars:
+            file: chaosutil.yml
+
+        ## GENERATE EXP RESULT NAME
+        - name: Construct chaos result name
+          set_fact:
+            c_result: "{{ c_engine }}-{{ c_experiment }}"
+          when: "c_engine is defined and c_engine != ''"
 
         ## RECORD START-OF-TEST IN LITMUS RESULT CR
 
@@ -74,76 +81,106 @@
               - "Label        : {{ a_label }}"
               - "PVC          : {{ a_pvc }}"  
 
-        ## PRE-CHAOS APPLICATION LIVENESS CHECK
-        - name: Get application pod name 
-          shell: >
-            kubectl get pods -n {{ a_ns }} -l {{ a_label }} --no-headers
-            -o=custom-columns=NAME:".metadata.name"
-          args:
-            executable: /bin/bash
-          register: app_pod_name 
+        ## PRE-CHAOS APPLICATION STATUS CHECK
 
         - name: Verify that the AUT (Application Under Test) is running
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
             app_ns: "{{ a_ns }}"
             app_label: "{{ a_label }}" 
-            delay: 5
-            retries: 60
+            delay: 2
+            retries: 90
 
-        - name: Create some test data 
-          include: "{{ data_consistency_util_path }}"
+        ## RECORD EVENT FOR PRE-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
           vars:
-            status: 'LOAD'
-            ns: "{{ a_ns }}"
-            pod_name: "{{ app_pod_name.stdout }}"
-          when: data_persistence != ''  
+            stage: "PreChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ a_ns }}"
+            message: "OpenEBS components and AUT is Running successfully"
+          when: "c_engine is defined and c_engine != ''"
+
+        - block:
+
+            - name: Get application pod name 
+              shell: >
+                kubectl get pods -n {{ a_ns }} -l {{ a_label }} --no-headers
+                -o=custom-columns=NAME:".metadata.name"
+              args:
+                executable: /bin/bash
+              register: app_pod 
+
+            - name: Create some test data 
+              include: "{{ data_consistency_util_path }}"
+              vars:
+                status: 'LOAD'
+                ns: "{{ a_ns }}"
+                pod_name: "{{ app_pod.stdout }}"
+              when: data_persistence != ''
+              
+          when: "a_pvc is defined and a_pvc != ''" 
 
         ## STORAGE FAULT INJECTION 
+        
+        - include_tasks: "{{ c_util }}"
+          vars:
+            error_messages: "{{ pool_debug_msg }}"
+            post_chaos_soak_time : "{{ c_duration }}"
+            app_ns: "{{ a_ns }}"
+            app_label: "{{ a_label }}"
 
-        - include: "{{ chaos_util_path }}"
-          error_messages: "{{ pool_debug_msg }}"
-          post_chaos_soak_time : "{{ c_duration }}"
-
-        ## POST-CHAOS APPLICATION LIVENESS CHECK
+        ## POST-CHAOS APPLICATION STATUS CHECK
 
         - name: Verify AUT liveness post fault-injection
           include_tasks: "/utils/common/status_app_pod.yml"
           vars:
             app_ns: "{{ a_ns }}"
             app_label: "{{ a_label }}" 
-            delay: 5
-            retries: 60
- 
-        - name: Verify application data persistence  
-          include: "{{ data_consistency_util_path }}"
+            delay: 2
+            retries: 90
+
+        ## RECORD EVENT FOR POST-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
           vars:
-            status: 'VERIFY'
-            ns: "{{ a_ns }}"
-            label: "{{ a_label }}"
-            pod_name: "{{ app_pod_name.stdout }}"
-          when: data_persistence != '' 
+            stage: "PostChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ a_ns }}"
+            message: "OpenEBS components and AUT is Running successfully"
+          when: "c_engine is defined and c_engine != ''"
 
-        - name: Get application pod name
-          shell: >
-            kubectl get pods -n {{ a_ns }} -l {{ a_label }} --no-headers
-            -o=custom-columns=NAME:".metadata.name"
-          args:
-            executable: /bin/bash
-          register: new_app_pod  
+        - block:
+          
+            - name: Get application pod name
+              shell: >
+                kubectl get pods -n {{ a_ns }} -l {{ a_label }} --no-headers
+                -o=custom-columns=NAME:".metadata.name"
+              args:
+                executable: /bin/bash
+              register: new_app_pod  
 
-        - name: Verify successful database delete
-          include: "{{ data_consistency_util_path }}"
-          vars:
-            status: 'DELETE'
-            ns: "{{ a_ns }}"
-            label: "{{ a_label }}"
-            pod_name: "{{ new_app_pod.stdout }}"
-          when: data_persistence != '' 
+            - name: Verify application data persistence  
+              include: "{{ data_consistency_util_path }}"
+              vars:
+                status: 'VERIFY'
+                ns: "{{ a_ns }}"
+                label: "{{ a_label }}"
+                pod_name: "{{ new_app_pod.stdout }}"
+              when: data_persistence != '' 
 
-          # Check application liveness post chaos
-        - include_tasks: /utils/common/application_liveness_check.yml
-          when: liveness_label != ''  
+            - name: Verify successful database delete
+              include: "{{ data_consistency_util_path }}"
+              vars:
+                status: 'DELETE'
+                ns: "{{ a_ns }}"
+                label: "{{ a_label }}"
+                pod_name: "{{ new_app_pod.stdout }}"
+              when: data_persistence != '' 
+
+            # Check application liveness post chaos
+            - include_tasks: /utils/common/application_liveness_check.yml
+              when: liveness_label != ''  
+
+          when: "a_pvc is defined and a_pvc != ''"
 
         - set_fact:
             flag: "Pass"
@@ -153,6 +190,10 @@
             flag: "Fail"
 
       always: 
+
+        ## Getting failure step from experiment-pod
+        - include_tasks: /utils/runtime/getting_failure_step.yml  
+
          ## RECORD END-OF-TEST IN LITMUS RESULT CR
         - include_tasks: /utils/runtime/update_chaos_result_resource.yml
           vars:

@@ -16,6 +16,9 @@
     project_id: "{{ lookup('env','PROJECT_ID') }}"
     zone_name: "{{ lookup('env','ZONE_NAME') }}"
     auxiliary_appinfo: "{{ lookup('env','AUXILIARY_APPINFO') }}"
+    c_engine: "{{ lookup('env','CHAOSENGINE') }}"
+    chaos_pod_name: "{{ lookup('env','POD_NAME') }}"
+    chaos_uid: "{{ lookup('env','CHAOS_UID') }}"
 
   tasks:
 
@@ -26,11 +29,10 @@
             file: chaosutil.yml 
 
         ## GENERATE EXP RESULT NAME
-        - block:
-            - name: Construct chaos result name (experiment_name)
-              set_fact:
-                c_experiment: "{{ lookup('env','CHAOSENGINE') }}-{{ c_experiment }}"
-          when: lookup('env','CHAOSENGINE')
+        - name: Construct chaos result name
+          set_fact:
+            c_result: "{{ c_engine }}-{{ c_experiment }}"
+          when: "c_engine is defined and c_engine != ''"
 
         # RECORD START-OF-EXPERIMENT IN LITMUSCHAOS RESULT CR
         - include_tasks: "/utils/runtime/update_chaos_result_resource.yml"
@@ -44,8 +46,8 @@
           vars:
             app_ns: "{{ a_ns }}"
             app_label: "{{ a_label }}" 
-            delay: 5
-            retries: 60
+            delay: 2
+            retries: 90
           when: "a_check == 'true'"
 
         # Auxiliary application health check status
@@ -59,12 +61,21 @@
             vars:
               app_ns: "{{ item.split(':')[0] }}"
               app_label: "{{ item.split(':')[1] }}"
-              delay: 5
-              retries: 60
+              delay: 2
+              retries: 90
             with_items:
               - "{{ auxiliary_appinfo_list }}" 
 
           when: auxiliary_appinfo is defined and auxiliary_appinfo != ''
+
+        ## RECORD EVENT FOR PRE-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+          vars:
+            stage: "PreChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ a_ns }}"
+            message: "AUT is Running successfully"
+          when: "c_engine is defined and c_engine != ''"
 
         # Gcloud authentication
         - name: Gcloud authentication
@@ -88,11 +99,11 @@
         # Checking disk is attached to node
         - debug: 
             msg: "specified disk is attached to node"   
-          when: "inuse == true"
+          when: "inuse is defined and inuse == true"
 
         - fail:
             msg: "specified disk not attached to node"
-          when: "inuse == false"
+          when: "inuse is defined and inuse == false"
 
          ## INJECTING CHAOS 
         - name: Injecting the chaos
@@ -104,8 +115,8 @@
           vars:
             app_ns: "{{ a_ns }}"
             app_label: "{{ a_label }}" 
-            delay: 1
-            retries: 60   
+            delay: 2
+            retries: 90   
           when: "a_check == 'true'"
 
         # Auxiliary application health check status
@@ -115,12 +126,21 @@
             vars:
               app_ns: "{{ item.split(':')[0] }}"
               app_label: "{{ item.split(':')[1] }}"
-              delay: 5
-              retries: 60
+              delay: 2
+              retries: 90
             with_items:
               - "{{ auxiliary_appinfo_list }}" 
 
           when: auxiliary_appinfo is defined and auxiliary_appinfo != ''
+
+        ## RECORD EVENT FOR POST-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+          vars:
+            stage: "PostChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ a_ns }}"
+            message: "Disk has been reattached and AUT is Running successfully"
+          when: "c_engine is defined and c_engine != ''"
 
         ## POST-CHAOS DISK LIVENESS CHECK
         - name: Verify that the disk is connected to node (post)
@@ -134,11 +154,11 @@
         # Checking disk is attached to node
         - debug: 
             msg: "specified disk is attached to node"   
-          when: "inuse == true"
+          when: "inuse is defined and inuse == true"
 
         - fail:
             msg: "specified disk not re-attached to node"
-          when: "inuse == false"
+          when: "inuse is defined and inuse == false"
 
         - set_fact:
             flag: "Pass"
@@ -149,6 +169,9 @@
             flag: "Fail"
 
       always:
+
+        ## Getting failure step from experiment-pod
+        - include_tasks: /utils/runtime/getting_failure_step.yml  
 
         ## RECORD END-OF-TEST IN LITMUSCHAOS RESULT CR
         - include_tasks: "/utils/runtime/update_chaos_result_resource.yml"

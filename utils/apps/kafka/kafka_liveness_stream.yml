@@ -35,8 +35,8 @@
     executable: /bin/bash
   register: result
   until: "'Running' in result.stdout"
-  delay: 1
-  retries: 120
+  delay: 2
+  retries: 90
 
 - name: Fetch the kafka-liveness pod name
   shell: 
@@ -89,4 +89,3 @@
 - name: Set the kafka broker to be subjected to chaos
   set_fact: 
     liveness_topic_leader: "{{ leader_broker.stdout }}"
-

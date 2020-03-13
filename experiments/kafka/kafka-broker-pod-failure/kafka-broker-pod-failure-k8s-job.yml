@@ -85,9 +85,6 @@ spec:
           - name: LIB
             value: ''
 
-          - name: CHAOSENGINE
-            value: ''
-
           - name: CHAOS_SERVICE_ACCOUNT
             valueFrom:
               fieldRef:
@@ -95,4 +92,3 @@ spec:
 
         command: ["/bin/bash"]
         args: ["-c", "ansible-playbook ./experiments/kafka/kafka-broker-pod-failure/kafka-broker-pod-failure-ansible-logic.yml -vv -i /etc/ansible/hosts; exit 0"]
-

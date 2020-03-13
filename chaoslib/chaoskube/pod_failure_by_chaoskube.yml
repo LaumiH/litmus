@@ -13,19 +13,19 @@
 
     - name: Replace CHAOSKUBE_SVC_ACC (placeholder) 
       replace: 
-        path: /chaoslib/chaoskube/chaoskube.yaml
+        path: /chaoslib/chaoskube/chaoskube.yml
         regexp: 'CHAOS_SERVICE_ACCOUNT'
         replace: "{{ lookup('env','CHAOSKUBE_SVC_ACC') }}"
 
     - name: Replace CHAOS_NS (placeholder) 
       replace: 
-        path: /chaoslib/chaoskube/chaoskube.yaml
+        path: /chaoslib/chaoskube/chaoskube.yml
         regexp: 'CHAOS_NAMESPACE'
         replace: "{{ namespace }}"
 
     - name: Setup chaoskube infrastructure
       shell: |
-        kubectl apply -f /chaoslib/chaoskube/chaoskube.yaml -n {{ namespace }}
+        kubectl apply -f /chaoslib/chaoskube/chaoskube.yml -n {{ namespace }}
       args:
         executable: /bin/bash
 
@@ -37,7 +37,7 @@
         executable: /bin/bash
       register: chaoskube
       until: "'Running' in chaoskube.stdout"
-      delay: 1
+      delay: 2
       retries: 90
 
     - name: Set the chaoskube pod name to variable
@@ -99,7 +99,7 @@
 
     - name: Tear down chaoskube infrastructure
       shell: |
-        kubectl delete -f /chaoslib/chaoskube/chaoskube.yaml -n {{ namespace }}
+        kubectl delete -f /chaoslib/chaoskube/chaoskube.yml -n {{ namespace }}
       args:
         executable: /bin/bash
       register: result
@@ -112,7 +112,7 @@
         executable: /bin/bash
       register: result
       until: "'Running' not in result.stdout"
-      delay: 1
-      retries: 150
+      delay: 2
+      retries: 90
 
   when: action == "cleanup"

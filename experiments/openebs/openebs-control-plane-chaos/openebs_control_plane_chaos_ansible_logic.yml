@@ -1,0 +1,81 @@
+- hosts: localhost
+  connection: local
+
+  vars:
+    c_experiment: "openebs-control-plane-chaos"
+    c_duration: "{{ lookup('env','TOTAL_CHAOS_DURATION') }}"
+    c_interval: "{{ lookup('env','CHAOS_INTERVAL') }}"
+    ramp_time: "{{ lookup('env','RAMP_TIME') }}"
+    c_force: "{{ lookup('env','FORCE') }}"
+    c_lib: "{{ lookup('env','LIB') }}"
+    c_svc_acc: "{{ lookup('env','CHAOS_SERVICE_ACCOUNT') }}"
+    chaos_uid: "{{ lookup('env','CHAOS_UID') }}"
+    openebs_ns: "{{ lookup('env','OPENEBS_NAMESPACE') }}"
+    kill_count: "{{ lookup('env','KILL_COUNT') }}"
+    c_engine: "{{ lookup('env','CHAOSENGINE') }}"
+    chaos_pod_name: "{{ lookup('env','POD_NAME') }}"
+    
+  tasks:
+    - block:
+        - include: openebs_control_plane_chaos_ansible_prerequisites.yml
+    
+        - include_vars:
+            file: chaosutil.yml
+
+        - name: Include openebs control plane components
+          include_vars:
+            file: /experiments/openebs/openebs_control_plane_components.yml
+            name: openebs
+
+        ## GENERATE EXP RESULT NAME
+        - name: Construct chaos result name
+          set_fact:
+            c_result: "{{ c_engine }}-{{ c_experiment }}"
+          when: "c_engine is defined and c_engine != ''"
+
+        ## RECORD START-OF-EXPERIMENT IN LITMUSCHAOS RESULT CR
+        - include_tasks: /utils/runtime/update_chaos_result_resource.yml
+          vars:
+            status: 'SOT'
+            namespace: "{{ openebs_ns }}"
+
+        ## RECORD EVENT FOR PRE-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+          vars:
+            stage: "PreChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ openebs_ns }}"
+            message: "OpenEBS control plane components are Running successfully"
+          when: "c_engine is defined and c_engine != ''"
+
+        ## INJECT CHAOS ON CONTROL PLANE COMPONENTS
+        - name: Including main components
+          include_tasks: openebs_control_plane_chaos_internal_tasks.yml
+          loop: "{{ openebs.components }}"
+
+        ## RECORD EVENT FOR POST-CHAOS CHECK
+        - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+          vars:
+            stage: "PostChaosCheck"
+            exp_pod_name: "{{ chaos_pod_name }}"
+            engine_ns: "{{ openebs_ns }}"
+            message: "OpenEBS control plane components are Running successfully"
+          when: "c_engine is defined and c_engine != ''"
+
+        - set_fact:
+            flag: "Pass"
+
+      rescue: 
+        - set_fact: 
+            flag: "Fail"
+
+      always: 
+
+        ## Getting failure step from experiment-pod
+        - include_tasks: /utils/runtime/getting_failure_step.yml  
+          
+        ## RECORD END-OF-TEST IN LITMUSCHAOS RESULT CR
+        - include_tasks: /utils/runtime/update_chaos_result_resource.yml
+          vars:
+            status: 'EOT'
+            namespace: "{{ openebs_ns }}"

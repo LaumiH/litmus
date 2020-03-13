@@ -1,0 +1,163 @@
+- block:
+    - block:
+        - name: Select the app pod
+          shell: >
+            kubectl get pod -l {{ a_label }} -n {{ namespace }}
+            -o=custom-columns=:metadata.name --no-headers
+            | shuf | head -1 
+          args:
+            executable: /bin/bash
+          register: app_pod_name
+
+        - name: Record app pod name
+          set_fact:
+            app_pod: "{{ app_pod_name.stdout }}"
+      when: "app_pod is not defined or app_pod == ''"
+
+    - name: Identify the application node
+      shell: >
+        kubectl get pod {{ app_pod }} -n {{ namespace }}
+        --no-headers -o custom-columns=:spec.nodeName
+      args:
+        executable: /bin/bash
+      register: app_node
+
+    - set_fact: 
+        app_node: "{{ app_node.stdout }}"
+
+    - block: 
+        - name: Generate a run id if not passed from the engine/experiment
+          shell: echo $(mktemp) | cut -d '.' -f 2 | cut -c -6
+          register: rand_string   
+
+        - set_fact:
+            run_id: "{{ rand_string.stdout | lower }}"
+      when: "run_id is not defined or run_id == ''"        
+    
+    - block:
+        - name: Record the application container
+          shell: >
+            kubectl get pods -l {{ label }} -n {{ namespace }} -o jsonpath='{.items[0].spec.containers[0].name}'
+          args:
+            executable: /bin/bash
+          register: container
+
+        - name: Record the app_container
+          set_fact:
+            a_container: "{{ container.stdout }}"
+      when: app_container is not defined or app_container == ''
+
+    - block:
+
+        - name: Record the app_container
+          set_fact:
+            a_container: "{{ app_container }}"
+        
+      when: app_container is defined and app_container != ''
+    
+    - name: Wait for the specified ramp time before injecting chaos
+      wait_for: timeout="{{ ramp_time }}"
+      when: "ramp_time is defined and ramp_time != ''"
+
+    - name: Patch the chaoslib image
+      template:
+        src:  /chaoslib/pumba/pumba.j2
+        dest: /chaoslib/pumba/pumba_kube.yml
+      vars:
+        pumba_image: "{{ lib_image }}"
+        app_node: "{{ app_node }}"
+        app_pod: "{{ app_pod }}"
+        app_container: "{{ a_container }}"
+
+    ## RECORD EVENT FOR CHAOS INJECTION
+    - include_tasks: /utils/common/generate-kubernetes-chaos-events.yml
+      vars:
+        stage: "ChaosInject"
+        exp_pod_name: "{{ chaos_pod_name }}"
+        engine_ns: "{{ a_ns }}"
+        message: "Injecting {{ c_experiment }} chaos on {{ a_container }} container of {{ app_pod }} pod"
+      when: "c_engine is defined and c_engine != ''"
+
+    - name: Record restartCount
+      shell: >
+        kubectl get pod {{ app_pod }} -n {{ namespace }}
+        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ a_container }}")].restartCount}'
+      args:
+        executable: /bin/bash
+      register: restartCnt_prev
+
+    - name: Setup pumba chaos infrastructure
+      shell: >
+        kubectl apply -f /chaoslib/pumba/pumba_kube.yml
+        -n {{ namespace }}
+      args:
+        executable: /bin/bash
+      register: pumba_job_result
+      
+    - name: Wait until the pumba sig-kill job is completed
+      shell: >
+        kubectl get pods -l job-name=pumba-sig-kill-{{ run_id }} --no-headers -n {{ namespace }}
+        --no-headers -o custom-columns=:status.phase
+      args: 
+        executable: /bin/bash
+      register: result
+      until: "result.stdout == 'Succeeded'"
+      delay: 2
+      retries: 90
+
+    - name: Wait for the specified ramp time after injecting chaos
+      wait_for: timeout="{{ ramp_time }}"
+      when: "ramp_time is defined and ramp_time != ''"
+
+    - name: Verify restartCount
+      shell: >
+        kubectl get pod {{ app_pod }} -n {{ namespace }}
+        -o=jsonpath='{.status.containerStatuses[?(@.name=="{{ a_container }}")].restartCount}'
+      args:
+        executable: /bin/bash
+      register: restartCnt
+      until: "restartCnt.stdout|int > restartCnt_prev.stdout|int"
+      delay: 2
+      retries: 90
+
+    - name: Tear down pumba infrastructure
+      shell: >
+        kubectl delete -f /chaoslib/pumba/pumba_kube.yml -n {{ namespace }}
+      args:
+        executable: /bin/bash
+
+    - name: Confirm that the pumba job is deleted successfully
+      shell: >
+        kubectl get pods -l job-name=pumba-sig-kill-{{ run_id }} --no-headers -n {{ namespace }}
+      args:
+        executable: /bin/bash
+      register: result
+      until: "'No resources found' in result.stderr"
+      delay: 2
+      retries: 90
+
+  rescue: 
+
+    - block: 
+
+        - name: Tear down pumba infrastructure, if setup
+          shell: >
+            kubectl delete -f /chaoslib/pumba/pumba_kube.yml -n {{ namespace }}
+          args:
+            executable: /bin/bash
+          when: pumba_job_result.rc == 0
+        
+        - name: Confirm that the pumba job is not present
+          shell: >
+            kubectl get pods -l job-name=pumba-sig-kill-{{ run_id }} --no-headers -n {{ namespace }}
+          args:
+            executable: /bin/bash
+          register: result
+          until: "'No resources found' in result.stderr"
+          delay: 2
+          retries: 60
+      when: "pumba_job_result is defined"
+
+    - fail:
+        msg: "pod_failure_by_sigkill lib failed"
+      when: true

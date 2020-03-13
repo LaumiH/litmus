@@ -1,17 +1,24 @@
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: containerd-chaos
+  name: containerd-chaos-{{ run_id }}
+  labels:
+    name: containerd-chaos
+{% if chaos_uid is defined and chaos_uid != '' %}        
+    chaosUID: {{ chaos_uid }}
+{% endif %}        
 spec:
-  selector:
-    matchLabels:
-      app: crictl
   template:
     metadata:
       labels:
         app: crictl
-      name: containerd-chaos
+{% if chaos_uid is defined and chaos_uid != '' %}        
+        chaosUID: {{ chaos_uid }}
+{% endif %}        
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: {{ app_node }}
+      restartPolicy: Never
       containers:
       - image: {{ containerd_image }}
         imagePullPolicy: Always
